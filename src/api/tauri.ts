@@ -40,6 +40,7 @@ export const api = {
     invoke<void>("clear_gateway_password", { profileId }),
 
   launchConnection: (profileId: string) => invoke<void>("launch_connection", { profileId }),
+  disconnectSession: (profileId: string) => invoke<void>("disconnect_session", { profileId }),
   exportRdpFile: (profileId: string, destPath: string) =>
     invoke<void>("export_rdp_file", { profileId, destPath }),
   listActiveSessions: () => invoke<string[]>("list_active_sessions"),

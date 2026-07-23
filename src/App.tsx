@@ -4,12 +4,23 @@ import { useStore } from "./state/store";
 import { GroupTree } from "./components/sidebar/GroupTree";
 import { ConnectionEditor } from "./components/editor/ConnectionEditor";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { Dashboard } from "./components/dashboard/Dashboard";
 import { DialogHost } from "./components/ui/DialogHost";
 
+type View = "editor" | "settings" | "dashboard";
+
 export default function App() {
-  const { loadAll, loading, searchQuery, setSearchQuery, toast, dismissToast, setSessionActive } =
-    useStore();
-  const [showSettings, setShowSettings] = useState(false);
+  const {
+    loadAll,
+    loading,
+    searchQuery,
+    setSearchQuery,
+    toast,
+    dismissToast,
+    setSessionActive,
+    activeSessionIds,
+  } = useStore();
+  const [view, setView] = useState<View>("editor");
 
   useEffect(() => {
     loadAll();
@@ -51,7 +62,18 @@ export default function App() {
         />
         <div className="flex-1" />
         <button
-          onClick={() => setShowSettings((s) => !s)}
+          onClick={() => setView((v) => (v === "dashboard" ? "editor" : "dashboard"))}
+          className="flex items-center gap-1.5 text-sm px-2 py-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
+        >
+          ▦ Dashboard
+          {activeSessionIds.size > 0 && (
+            <span className="text-[11px] leading-none px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+              {activeSessionIds.size}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setView((v) => (v === "settings" ? "editor" : "settings"))}
           className="text-sm px-2 py-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
         >
           ⚙ Settings
@@ -62,11 +84,11 @@ export default function App() {
         <aside className="w-64 shrink-0 border-r border-neutral-200 dark:border-neutral-700 overflow-hidden">
           <GroupTree />
         </aside>
-        {showSettings ? (
-          <SettingsPage onClose={() => setShowSettings(false)} />
-        ) : (
-          <ConnectionEditor />
+        {view === "settings" && <SettingsPage onClose={() => setView("editor")} />}
+        {view === "dashboard" && (
+          <Dashboard onClose={() => setView("editor")} />
         )}
+        {view === "editor" && <ConnectionEditor />}
       </div>
 
       {toast && (

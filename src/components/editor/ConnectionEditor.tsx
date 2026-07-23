@@ -36,8 +36,10 @@ export function ConnectionEditor() {
     saveProfile,
     cancelEditing,
     launchConnection,
+    disconnectSession,
     platform,
     activeSessionIds,
+    launchingProfileIds,
   } = useStore();
 
   const existing: ConnectionProfile | undefined = profiles.find(
@@ -134,9 +136,25 @@ export function ConnectionEditor() {
               Connected
             </span>
           )}
+          {existing && activeSessionIds.has(existing.id) && (
+            <Button variant="ghost" onClick={() => disconnectSession(existing.id)}>
+              ✕ Disconnect
+            </Button>
+          )}
           {existing && (
-            <Button variant="ghost" onClick={() => launchConnection(existing.id)}>
-              ▶ Launch
+            <Button
+              variant="ghost"
+              disabled={launchingProfileIds.has(existing.id)}
+              onClick={() => launchConnection(existing.id)}
+            >
+              {launchingProfileIds.has(existing.id) ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  Launching…
+                </span>
+              ) : (
+                "▶ Launch"
+              )}
             </Button>
           )}
           <Button variant="secondary" onClick={cancelEditing}>

@@ -31,6 +31,8 @@ interface AppState {
   platform: Platform | null;
   launcherStatus: LauncherReadiness | null;
   activeSessionIds: Set<string>;
+  sessionStartedAt: Record<string, number>;
+  launchingProfileIds: Set<string>;
   loading: boolean;
   toast: { kind: "error" | "success"; message: string } | null;
 
@@ -54,6 +56,7 @@ interface AppState {
   deleteProfile: (id: string) => Promise<void>;
   duplicateProfile: (id: string) => Promise<void>;
   launchConnection: (id: string) => Promise<void>;
+  disconnectSession: (id: string) => Promise<void>;
   setSessionActive: (profileId: string, active: boolean) => void;
 
   showToast: (kind: "error" | "success", message: string) => void;
@@ -75,6 +78,8 @@ export const useStore = create<AppState>((set, get) => ({
   platform: null,
   launcherStatus: null,
   activeSessionIds: new Set(),
+  sessionStartedAt: {},
+  launchingProfileIds: new Set(),
   loading: true,
   toast: null,
 
@@ -88,12 +93,14 @@ export const useStore = create<AppState>((set, get) => ({
         api.checkLauncherStatus(),
         api.listActiveSessions(),
       ]);
+      const now = Date.now();
       set({
         groups,
         profiles,
         platform,
         launcherStatus,
         activeSessionIds: new Set(activeSessions),
+        sessionStartedAt: Object.fromEntries(activeSessions.map((id) => [id, now])),
         loading: false,
       });
     } catch (e) {
@@ -193,17 +200,40 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   launchConnection: async (id) => {
+    const launching = new Set(get().launchingProfileIds);
+    launching.add(id);
+    set({ launchingProfileIds: launching });
     try {
-      await api.launchConnection(id);
+      // Spawning is near-instant, but the spinner should stay visible long
+      // enough to actually register as feedback rather than flicker.
+      const minDuration = new Promise((resolve) => setTimeout(resolve, 500));
+      await Promise.all([api.launchConnection(id), minDuration]);
+    } catch (e) {
+      get().showToast("error", String(e));
+    } finally {
+      const next = new Set(get().launchingProfileIds);
+      next.delete(id);
+      set({ launchingProfileIds: next });
+    }
+  },
+  disconnectSession: async (id) => {
+    try {
+      await api.disconnectSession(id);
     } catch (e) {
       get().showToast("error", String(e));
     }
   },
   setSessionActive: (profileId, active) => {
     const next = new Set(get().activeSessionIds);
-    if (active) next.add(profileId);
-    else next.delete(profileId);
-    set({ activeSessionIds: next });
+    const startedAt = { ...get().sessionStartedAt };
+    if (active) {
+      next.add(profileId);
+      startedAt[profileId] = Date.now();
+    } else {
+      next.delete(profileId);
+      delete startedAt[profileId];
+    }
+    set({ activeSessionIds: next, sessionStartedAt: startedAt });
   },
 
   showToast: (kind, message) => {

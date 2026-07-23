@@ -47,6 +47,7 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
     duplicateProfile,
     deleteProfile,
     activeSessionIds,
+    launchingProfileIds,
     askPrompt,
     askConfirm,
   } = useStore();
@@ -153,16 +154,25 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
               <span className="flex-1 truncate" title={`${p.host}:${p.port}`}>
                 🖥️ {p.name}
               </span>
-              <div className="hidden group-hover:flex gap-1 shrink-0">
+              <div
+                className={`gap-1 shrink-0 ${
+                  launchingProfileIds.has(p.id) ? "flex" : "hidden group-hover:flex"
+                }`}
+              >
                 <button
                   title="Launch"
+                  disabled={launchingProfileIds.has(p.id)}
                   onClick={(e) => {
                     e.stopPropagation();
                     launchConnection(p.id);
                   }}
-                  className="text-neutral-400 hover:text-green-600 text-xs px-1"
+                  className="text-neutral-400 hover:text-green-600 text-xs px-1 disabled:opacity-50"
                 >
-                  ▶
+                  {launchingProfileIds.has(p.id) ? (
+                    <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    "▶"
+                  )}
                 </button>
                 <button
                   title="Duplicate"

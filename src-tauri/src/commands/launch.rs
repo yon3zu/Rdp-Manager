@@ -26,8 +26,9 @@ pub fn launch_connection(
 
     let launcher = launcher::make_launcher();
     let mut child = launcher.launch(&profile, password.as_deref(), gateway_password.as_deref())?;
+    let pid = child.id();
 
-    sessions::mark_started(&sessions.0, &profile_id);
+    sessions::mark_started(&sessions.0, &profile_id, pid);
     let _ = app.emit("session-started", profile_id.clone());
 
     let sessions_map = sessions.0.clone();
@@ -35,9 +36,10 @@ pub fn launch_connection(
     let watched_id = profile_id.clone();
     std::thread::spawn(move || {
         // Blocks until the RDP client process (mstsc/xfreerdp/sdl-freerdp) exits,
-        // i.e. the user closed the window or the session disconnected.
+        // i.e. the user closed the window, disconnected, or we killed it via
+        // disconnect_session.
         let _ = child.wait();
-        if sessions::mark_ended(&sessions_map, &watched_id) {
+        if sessions::mark_ended(&sessions_map, &watched_id, pid) {
             let _ = app_handle.emit("session-ended", watched_id);
         }
     });
@@ -48,6 +50,32 @@ pub fn launch_connection(
 #[tauri::command]
 pub fn list_active_sessions(sessions: State<SessionsState>) -> Vec<String> {
     sessions::active_profile_ids(&sessions.0)
+}
+
+/// Force-closes every RDP client process currently running for this profile.
+/// The background waiter thread in `launch_connection` observes the exit and
+/// emits `session-ended` as usual, so the frontend doesn't need a separate
+/// optimistic update.
+#[tauri::command]
+pub fn disconnect_session(sessions: State<SessionsState>, profile_id: String) -> AppResult<()> {
+    for pid in sessions::pids_for(&sessions.0, &profile_id) {
+        kill_pid(pid);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .status();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("kill")
+        .arg(pid.to_string())
+        .status();
 }
 
 #[tauri::command]
