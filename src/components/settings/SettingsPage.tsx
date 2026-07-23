@@ -1,15 +1,38 @@
 import { useState } from "react";
 import { useStore } from "../../state/store";
+import { api } from "../../api/tauri";
 import { Button } from "../ui/primitives";
 
 export function SettingsPage({ onClose }: { onClose: () => void }) {
-  const { platform, launcherStatus } = useStore();
+  const { platform, launcherStatus, showToast } = useStore();
   const [copied, setCopied] = useState(false);
+  const [thumbprint, setThumbprint] = useState<string | null>(null);
+  const [loadingThumbprint, setLoadingThumbprint] = useState(false);
+  const [thumbprintCopied, setThumbprintCopied] = useState(false);
 
   const copyInstallCommand = async () => {
     await navigator.clipboard.writeText("brew install freerdp");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const generateCertificate = async () => {
+    setLoadingThumbprint(true);
+    try {
+      const tp = await api.getSigningThumbprint();
+      setThumbprint(tp);
+    } catch (e) {
+      showToast("error", String(e));
+    } finally {
+      setLoadingThumbprint(false);
+    }
+  };
+
+  const copyThumbprint = async () => {
+    if (!thumbprint) return;
+    await navigator.clipboard.writeText(thumbprint);
+    setThumbprintCopied(true);
+    setTimeout(() => setThumbprintCopied(false), 2000);
   };
 
   return (
@@ -56,6 +79,53 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             </p>
           )}
         </section>
+
+        {platform === "windows" && (
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+              RDP file signing
+            </h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Windows shows a security warning ("unknown publisher") every time you launch an
+              unsigned .rdp file. Generate a local certificate and trust it once via Group Policy
+              to suppress this warning for every connection launched by this app.
+            </p>
+            {!thumbprint ? (
+              <Button onClick={generateCertificate} disabled={loadingThumbprint} className="self-start">
+                {loadingThumbprint ? "Generating…" : "Generate signing certificate"}
+              </Button>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <code className="bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded text-xs break-all">
+                    {thumbprint}
+                  </code>
+                  <Button variant="secondary" onClick={copyThumbprint}>
+                    {thumbprintCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+                <ol className="text-sm text-neutral-600 dark:text-neutral-400 list-decimal list-inside flex flex-col gap-1">
+                  <li>
+                    Open <code className="bg-neutral-100 dark:bg-neutral-800 px-1 rounded">gpedit.msc</code> (Local
+                    Group Policy Editor — requires Windows Pro/Enterprise)
+                  </li>
+                  <li>
+                    Go to Computer Configuration → Administrative Templates → Windows Components →
+                    Remote Desktop Services → Remote Desktop Connection Client
+                  </li>
+                  <li>
+                    Enable "Specify thumbprints of certificates representing trusted .rdp
+                    publishers" and paste the thumbprint above
+                  </li>
+                </ol>
+                <p className="text-xs text-neutral-500">
+                  This is a one-time setup per Windows machine — not per connection. New
+                  connections launched by this app are signed automatically from now on.
+                </p>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">About</h3>

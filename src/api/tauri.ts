@@ -46,4 +46,5 @@ export const api = {
 
   checkLauncherStatus: () => invoke<LauncherReadiness>("check_launcher_status"),
   getPlatform: () => invoke<Platform>("get_platform"),
+  getSigningThumbprint: () => invoke<string>("get_signing_thumbprint"),
 };

@@ -6,6 +6,8 @@ mod launcher;
 mod models;
 mod rdpfile;
 mod sessions;
+#[cfg(target_os = "windows")]
+mod signing;
 
 use db::DbState;
 use sessions::SessionsState;
@@ -48,6 +50,7 @@ pub fn run() {
             commands::launch::list_active_sessions,
             commands::system::check_launcher_status,
             commands::system::get_platform,
+            commands::system::get_signing_thumbprint,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

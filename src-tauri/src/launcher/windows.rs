@@ -29,6 +29,13 @@ impl RdpLauncher for WindowsLauncher {
         let file_path = tmp_dir.join(file_name);
         fs::write(&file_path, content)?;
 
+        // Signing is best-effort: if it fails (no cert yet, rdpsign missing),
+        // fall back to launching the unsigned file rather than blocking the
+        // connection. The user just sees the "unknown publisher" prompt.
+        if let Ok(thumbprint) = crate::signing::get_or_create_thumbprint() {
+            let _ = crate::signing::sign_rdp_file(&file_path, &thumbprint);
+        }
+
         let child = Command::new("mstsc.exe").arg(&file_path).spawn()?;
 
         Ok(child)
