@@ -8,6 +8,19 @@ import type {
   Platform,
 } from "../api/types";
 
+interface PromptDialogState {
+  kind: "prompt";
+  message: string;
+  defaultValue: string;
+  resolve: (value: string | null) => void;
+}
+
+interface ConfirmDialogState {
+  kind: "confirm";
+  message: string;
+  resolve: (value: boolean) => void;
+}
+
 interface AppState {
   groups: Group[];
   profiles: ConnectionProfile[];
@@ -45,6 +58,11 @@ interface AppState {
 
   showToast: (kind: "error" | "success", message: string) => void;
   dismissToast: () => void;
+
+  dialog: PromptDialogState | ConfirmDialogState | null;
+  askPrompt: (message: string, defaultValue?: string) => Promise<string | null>;
+  askConfirm: (message: string) => Promise<boolean>;
+  resolveDialog: (value: string | boolean | null) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -195,4 +213,24 @@ export const useStore = create<AppState>((set, get) => ({
     }, 5000);
   },
   dismissToast: () => set({ toast: null }),
+
+  dialog: null,
+  askPrompt: (message, defaultValue = "") =>
+    new Promise((resolve) => {
+      set({ dialog: { kind: "prompt", message, defaultValue, resolve } });
+    }),
+  askConfirm: (message) =>
+    new Promise((resolve) => {
+      set({ dialog: { kind: "confirm", message, resolve } });
+    }),
+  resolveDialog: (value) => {
+    const dialog = get().dialog;
+    if (!dialog) return;
+    set({ dialog: null });
+    if (dialog.kind === "prompt") {
+      dialog.resolve(typeof value === "string" ? value : null);
+    } else {
+      dialog.resolve(value === true);
+    }
+  },
 }));

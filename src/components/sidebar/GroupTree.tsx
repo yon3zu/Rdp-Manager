@@ -47,6 +47,8 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
     duplicateProfile,
     deleteProfile,
     activeSessionIds,
+    askPrompt,
+    askConfirm,
   } = useStore();
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.group?.name ?? "");
@@ -101,8 +103,8 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
             </button>
             <button
               title="New subgroup"
-              onClick={() => {
-                const name = prompt("Subgroup name?");
+              onClick={async () => {
+                const name = await askPrompt("Subgroup name?");
                 if (name?.trim()) createGroup(name.trim(), node.group!.id);
               }}
               className="text-neutral-400 hover:text-blue-600 text-xs px-1"
@@ -111,10 +113,11 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
             </button>
             <button
               title="Delete group"
-              onClick={() => {
-                if (confirm(`Delete group "${node.group!.name}"? Connections inside become ungrouped.`)) {
-                  deleteGroup(node.group!.id);
-                }
+              onClick={async () => {
+                const ok = await askConfirm(
+                  `Delete group "${node.group!.name}"? Connections inside become ungrouped.`
+                );
+                if (ok) deleteGroup(node.group!.id);
               }}
               className="text-neutral-400 hover:text-red-600 text-xs px-1"
             >
@@ -173,9 +176,10 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
                 </button>
                 <button
                   title="Delete"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete connection "${p.name}"?`)) deleteProfile(p.id);
+                    const ok = await askConfirm(`Delete connection "${p.name}"?`);
+                    if (ok) deleteProfile(p.id);
                   }}
                   className="text-neutral-400 hover:text-red-600 text-xs px-1"
                 >
@@ -191,7 +195,7 @@ function GroupNode({ node, depth }: { node: TreeNode; depth: number }) {
 }
 
 export function GroupTree() {
-  const { groups, profiles, searchQuery, createGroup, startNewProfile } = useStore();
+  const { groups, profiles, searchQuery, createGroup, startNewProfile, askPrompt } = useStore();
 
   const filteredProfiles = useMemo(() => {
     if (!searchQuery.trim()) return profiles;
@@ -210,8 +214,8 @@ export function GroupTree() {
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 p-2 border-b border-neutral-200 dark:border-neutral-700">
         <button
-          onClick={() => {
-            const name = prompt("Group name?");
+          onClick={async () => {
+            const name = await askPrompt("Group name?");
             if (name?.trim()) createGroup(name.trim(), null);
           }}
           className="flex-1 text-xs px-2 py-1.5 rounded bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-neutral-800 dark:text-neutral-100"

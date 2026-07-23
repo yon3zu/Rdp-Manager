@@ -1,5 +1,25 @@
-import type { ConnectionProfileInput } from "../../../api/types";
-import { Button, Field, TextInput } from "../../ui/primitives";
+import { useMemo } from "react";
+import type { ConnectionProfileInput, Group } from "../../../api/types";
+import { useStore } from "../../../state/store";
+import { Button, Field, Select, TextInput } from "../../ui/primitives";
+
+function flattenGroups(groups: Group[]): { id: string; label: string }[] {
+  const byParent = new Map<string | null, Group[]>();
+  for (const g of groups) {
+    const key = g.parent_id;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(g);
+  }
+  const out: { id: string; label: string }[] = [];
+  function walk(parentId: string | null, depth: number) {
+    for (const g of byParent.get(parentId) ?? []) {
+      out.push({ id: g.id, label: `${"— ".repeat(depth)}${g.name}` });
+      walk(g.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return out;
+}
 
 export function GeneralTab({
   input,
@@ -16,8 +36,27 @@ export function GeneralTab({
   hasPassword: boolean;
   onClearPassword?: () => void;
 }) {
+  const groups = useStore((s) => s.groups);
+  const groupOptions = useMemo(() => flattenGroups(groups), [groups]);
+
   return (
     <div className="grid grid-cols-2 gap-4 max-w-xl">
+      <div className="col-span-2">
+        <Field label="Group">
+          <Select
+            value={input.group_id ?? ""}
+            onChange={(e) => setInput({ ...input, group_id: e.target.value || null })}
+            className="max-w-xs"
+          >
+            <option value="">No group</option>
+            {groupOptions.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
       <Field label="Host">
         <TextInput
           value={input.host}

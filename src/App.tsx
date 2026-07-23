@@ -4,6 +4,7 @@ import { useStore } from "./state/store";
 import { GroupTree } from "./components/sidebar/GroupTree";
 import { ConnectionEditor } from "./components/editor/ConnectionEditor";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { DialogHost } from "./components/ui/DialogHost";
 
 export default function App() {
   const { loadAll, loading, searchQuery, setSearchQuery, toast, dismissToast, setSessionActive } =
@@ -78,6 +79,8 @@ export default function App() {
           {toast.message}
         </div>
       )}
+
+      <DialogHost />
     </div>
   );
 }
