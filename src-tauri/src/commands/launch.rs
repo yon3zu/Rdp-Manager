@@ -139,27 +139,28 @@ fn log_focus_pid_result(pid: u32, detail: &str) {
 
 #[cfg(target_os = "windows")]
 fn focus_pid(pid: u32) {
-    // SetForegroundWindow from an unrelated process is subject to Windows'
-    // foreground-lock restrictions and isn't 100% guaranteed to succeed in
-    // every situation, but this is the standard approach and works in the
-    // common case. ShowWindow(9) = SW_RESTORE, in case the window is minimized.
+    // Previously used Add-Type with inline C# (P/Invoke of user32) to call
+    // SetForegroundWindow/ShowWindow — that forces PowerShell to invoke the
+    // Roslyn C# compiler on every single click, which is slow (multi-second)
+    // and, without a hidden creation flag, flashes a visible console window.
+    // Microsoft.VisualBasic.Interaction.AppActivate is a built-in .NET method
+    // (loaded as a precompiled assembly reference, not compiled from source)
+    // that activates a process by pid and restores it if minimized — same
+    // net effect, without the compile step. Foreground-lock restrictions
+    // still apply (Windows doesn't unconditionally let a background process
+    // steal focus), so this isn't 100% guaranteed either, but it's the
+    // standard lightweight approach.
     let script = format!(
-        r#"
-$proc = Get-Process -Id {pid} -ErrorAction SilentlyContinue
-if ($proc -and $proc.MainWindowHandle -ne 0) {{
-    Add-Type -Name Win32ShowWindowAsync -Namespace Win32Functions -MemberDefinition '
-        [DllImport("user32.dll")]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
-        [DllImport("user32.dll")]
-        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    '
-    [Win32Functions.Win32ShowWindowAsync]::ShowWindow($proc.MainWindowHandle, 9)
-    [Win32Functions.Win32ShowWindowAsync]::SetForegroundWindow($proc.MainWindowHandle)
-}}
-"#
+        "Add-Type -AssemblyName Microsoft.VisualBasic; \
+         [Microsoft.VisualBasic.Interaction]::AppActivate({pid})"
     );
+
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW: don't flash a console window for this background call.
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let _ = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .status();
 }
 

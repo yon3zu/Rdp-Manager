@@ -4,16 +4,20 @@
 //! Windows-only: rdpsign.exe and cert store access don't exist elsewhere.
 #![cfg(target_os = "windows")]
 
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 
 use crate::error::{AppError, AppResult};
 
 const CERT_SUBJECT: &str = "CN=RDP Manager Local Signing";
+// Don't flash a console window for these background PowerShell/rdpsign calls.
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 fn run_powershell(script: &str) -> AppResult<String> {
     let output = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()?;
 
     if !output.status.success() {
@@ -58,6 +62,7 @@ pub fn sign_rdp_file(path: &Path, thumbprint: &str) -> AppResult<()> {
     let status = Command::new("rdpsign.exe")
         .args(["/sha256", thumbprint, "/q"])
         .arg(path)
+        .creation_flags(CREATE_NO_WINDOW)
         .status()?;
 
     if !status.success() {
