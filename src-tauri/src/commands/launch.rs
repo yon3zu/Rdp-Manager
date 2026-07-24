@@ -83,10 +83,25 @@ fn kill_pid(pid: u32) {
 /// instead of just selecting it in the editor.
 #[tauri::command]
 pub fn focus_session(sessions: State<SessionsState>, profile_id: String) -> AppResult<()> {
-    if let Some(&pid) = sessions::pids_for(&sessions.0, &profile_id).first() {
+    let pids = sessions::pids_for(&sessions.0, &profile_id);
+    log_focus_attempt(&profile_id, &pids);
+    if let Some(&pid) = pids.first() {
         focus_pid(pid);
     }
     Ok(())
+}
+
+/// Temporary diagnostic trail for the "wrong window gets focused" report —
+/// lets us see exactly which pid(s) the backend resolved for a given click
+/// without needing to reproduce it live. Safe to remove once that's closed out.
+fn log_focus_attempt(profile_id: &str, pids: &[u32]) {
+    use std::io::Write;
+    let mut path = std::env::temp_dir();
+    path.push("rdpmanager-focus.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let now = chrono::Utc::now().to_rfc3339();
+        let _ = writeln!(f, "{now} profile_id={profile_id} pids={pids:?}");
+    }
 }
 
 #[cfg(target_os = "macos")]
