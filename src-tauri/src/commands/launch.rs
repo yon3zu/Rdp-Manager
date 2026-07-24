@@ -91,17 +91,22 @@ pub fn focus_session(sessions: State<SessionsState>, profile_id: String) -> AppR
 
 #[cfg(target_os = "macos")]
 fn focus_pid(pid: u32) {
-    // Setting `frontmost` alone activates the process but does NOT deminiaturize
-    // an already-minimized window (it stays sitting in the Dock) — also clear
-    // AXMinimized on every window the process owns before/while activating it.
+    // Setting `frontmost` only needs Automation permission and deactivates
+    // the process, but does NOT deminiaturize an already-minimized window —
+    // that needs reading/writing the AXMinimized attribute, which requires
+    // the separate (often not-yet-granted) Accessibility permission. Wrap
+    // that part in `try` so a missing Accessibility grant doesn't also take
+    // down the frontmost activation, which worked fine on its own before.
     let script = format!(
         r#"tell application "System Events"
     set targetProcess to first process whose unix id is {pid}
-    repeat with w in windows of targetProcess
-        if value of attribute "AXMinimized" of w is true then
-            set value of attribute "AXMinimized" of w to false
-        end if
-    end repeat
+    try
+        repeat with w in windows of targetProcess
+            if value of attribute "AXMinimized" of w is true then
+                set value of attribute "AXMinimized" of w to false
+            end if
+        end repeat
+    end try
     set frontmost of targetProcess to true
 end tell"#
     );
