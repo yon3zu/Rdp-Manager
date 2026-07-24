@@ -49,6 +49,7 @@ pub fn run() {
             commands::launch::export_rdp_file,
             commands::launch::list_active_sessions,
             commands::launch::disconnect_session,
+            commands::launch::focus_session,
             commands::system::check_launcher_status,
             commands::system::get_platform,
             commands::system::get_signing_thumbprint,

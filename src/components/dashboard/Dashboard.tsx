@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../../state/store";
+import { api } from "../../api/tauri";
 import { Button } from "../ui/primitives";
 
 function formatDuration(ms: number): string {
@@ -12,8 +13,15 @@ function formatDuration(ms: number): string {
 }
 
 export function Dashboard({ onClose }: { onClose: () => void }) {
-  const { profiles, groups, activeSessionIds, sessionStartedAt, disconnectSession, selectProfile } =
-    useStore();
+  const {
+    profiles,
+    groups,
+    activeSessionIds,
+    sessionStartedAt,
+    disconnectSession,
+    selectProfile,
+    showToast,
+  } = useStore();
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -46,17 +54,32 @@ export function Dashboard({ onClose }: { onClose: () => void }) {
               return (
                 <div
                   key={p.id}
-                  onClick={() => {
-                    selectProfile(p.id);
-                    onClose();
+                  onClick={async () => {
+                    try {
+                      await api.focusSession(p.id);
+                    } catch (e) {
+                      showToast("error", String(e));
+                    }
                   }}
-                  className="cursor-pointer rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 flex flex-col gap-2 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+                  title="Click to jump to this session's window"
+                  className="group cursor-pointer rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 flex flex-col gap-2 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
-                    <span className="font-medium text-sm text-neutral-900 dark:text-neutral-100 truncate">
+                    <span className="font-medium text-sm text-neutral-900 dark:text-neutral-100 truncate flex-1">
                       {p.name}
                     </span>
+                    <button
+                      title="Edit connection"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectProfile(p.id);
+                        onClose();
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-blue-600 text-xs px-1 shrink-0"
+                    >
+                      ⚙
+                    </button>
                   </div>
                   <div className="text-xs text-neutral-500 truncate" title={`${p.host}:${p.port}`}>
                     {p.host}:{p.port}
