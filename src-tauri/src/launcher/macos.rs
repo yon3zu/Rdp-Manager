@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::error::{AppError, AppResult};
@@ -7,14 +8,34 @@ use super::{xfreerdp_args, LauncherReadiness, RdpLauncher};
 
 pub struct MacLauncher;
 
+/// Apps launched via Finder/Dock/Spotlight (not a terminal) get launchd's
+/// minimal default PATH (`/usr/bin:/bin:/usr/sbin:/sbin`), which does NOT
+/// include Homebrew's install dirs — so `which` alone misses Homebrew
+/// installs unless the app happens to be launched from a terminal. Check
+/// well-known install locations directly first, then fall back to PATH.
+const KNOWN_BIN_DIRS: &[&str] = &[
+    "/opt/homebrew/bin", // Homebrew on Apple Silicon
+    "/usr/local/bin",    // Homebrew on Intel, or manual installs
+    "/opt/local/bin",    // MacPorts
+];
+
+fn find_binary(name: &str) -> Option<PathBuf> {
+    for dir in KNOWN_BIN_DIRS {
+        let candidate = Path::new(dir).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    which::which(name).ok()
+}
+
 /// `sdl-freerdp` uses FreeRDP's native SDL client (no XQuartz/X11 required)
 /// and shares the same common cmdline flags as `xfreerdp`, so it's preferred.
 /// `xfreerdp` (X11-based) is the fallback for installs that only ship it.
-fn find_rdp_client() -> Option<std::path::PathBuf> {
-    which::which("sdl-freerdp")
-        .or_else(|_| which::which("xfreerdp"))
-        .or_else(|_| which::which("xfreerdp3"))
-        .ok()
+fn find_rdp_client() -> Option<PathBuf> {
+    find_binary("sdl-freerdp")
+        .or_else(|| find_binary("xfreerdp"))
+        .or_else(|| find_binary("xfreerdp3"))
 }
 
 impl RdpLauncher for MacLauncher {
