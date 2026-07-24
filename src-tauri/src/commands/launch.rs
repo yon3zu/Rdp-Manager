@@ -91,10 +91,20 @@ pub fn focus_session(sessions: State<SessionsState>, profile_id: String) -> AppR
 
 #[cfg(target_os = "macos")]
 fn focus_pid(pid: u32) {
-    // AppleScript's System Events can activate a process by unix pid directly —
-    // simpler and more reliable than resolving a specific window via Accessibility APIs.
-    let script =
-        format!(r#"tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true"#);
+    // Setting `frontmost` alone activates the process but does NOT deminiaturize
+    // an already-minimized window (it stays sitting in the Dock) — also clear
+    // AXMinimized on every window the process owns before/while activating it.
+    let script = format!(
+        r#"tell application "System Events"
+    set targetProcess to first process whose unix id is {pid}
+    repeat with w in windows of targetProcess
+        if value of attribute "AXMinimized" of w is true then
+            set value of attribute "AXMinimized" of w to false
+        end if
+    end repeat
+    set frontmost of targetProcess to true
+end tell"#
+    );
     let _ = std::process::Command::new("osascript")
         .args(["-e", &script])
         .status();
