@@ -62,7 +62,7 @@ export function Dashboard({ onClose }: { onClose: () => void }) {
                     }
                   }}
                   title="Click to jump to this session's window"
-                  className="group cursor-pointer rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 flex flex-col gap-2 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
+                  className="group cursor-pointer rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-4 flex flex-col gap-2.5 min-h-[110px] hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all"
                 >
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 animate-pulse" />
