@@ -24,7 +24,9 @@ pub fn run() {
             let db_path = app_data_dir.join("rdpmanager.sqlite3");
             let conn = db::open(&db_path).expect("failed to open database");
             app.manage(DbState(Mutex::new(conn)));
-            app.manage(SessionsState::default());
+
+            let sessions_path = app_data_dir.join("active_sessions.json");
+            app.manage(SessionsState::load_reconciled(sessions_path));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

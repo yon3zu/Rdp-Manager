@@ -7,7 +7,7 @@ use crate::db::{profiles_repo, DbState};
 use crate::error::AppResult;
 use crate::launcher::{self, RdpLauncher};
 use crate::rdpfile;
-use crate::sessions::{self, SessionsState};
+use crate::sessions::SessionsState;
 
 #[tauri::command]
 pub fn launch_connection(
@@ -28,10 +28,10 @@ pub fn launch_connection(
     let mut child = launcher.launch(&profile, password.as_deref(), gateway_password.as_deref())?;
     let pid = child.id();
 
-    sessions::mark_started(&sessions.0, &profile_id, pid);
+    sessions.mark_started(&profile_id, pid);
     let _ = app.emit("session-started", profile_id.clone());
 
-    let sessions_map = sessions.0.clone();
+    let sessions_clone = sessions.inner().clone();
     let app_handle = app.clone();
     let watched_id = profile_id.clone();
     std::thread::spawn(move || {
@@ -39,7 +39,7 @@ pub fn launch_connection(
         // i.e. the user closed the window, disconnected, or we killed it via
         // disconnect_session.
         let _ = child.wait();
-        if sessions::mark_ended(&sessions_map, &watched_id, pid) {
+        if sessions_clone.mark_ended(&watched_id, pid) {
             let _ = app_handle.emit("session-ended", watched_id);
         }
     });
@@ -49,7 +49,7 @@ pub fn launch_connection(
 
 #[tauri::command]
 pub fn list_active_sessions(sessions: State<SessionsState>) -> Vec<String> {
-    sessions::active_profile_ids(&sessions.0)
+    sessions.active_profile_ids()
 }
 
 /// Force-closes every RDP client process currently running for this profile.
@@ -58,7 +58,7 @@ pub fn list_active_sessions(sessions: State<SessionsState>) -> Vec<String> {
 /// optimistic update.
 #[tauri::command]
 pub fn disconnect_session(sessions: State<SessionsState>, profile_id: String) -> AppResult<()> {
-    for pid in sessions::pids_for(&sessions.0, &profile_id) {
+    for pid in sessions.pids_for(&profile_id) {
         kill_pid(pid);
     }
     Ok(())
@@ -83,7 +83,7 @@ fn kill_pid(pid: u32) {
 /// instead of just selecting it in the editor.
 #[tauri::command]
 pub fn focus_session(sessions: State<SessionsState>, profile_id: String) -> AppResult<()> {
-    let pids = sessions::pids_for(&sessions.0, &profile_id);
+    let pids = sessions.pids_for(&profile_id);
     log_focus_attempt(&profile_id, &pids);
     if let Some(&pid) = pids.first() {
         focus_pid(pid);
@@ -106,28 +106,35 @@ fn log_focus_attempt(profile_id: &str, pids: &[u32]) {
 
 #[cfg(target_os = "macos")]
 fn focus_pid(pid: u32) {
-    // Setting `frontmost` only needs Automation permission and deactivates
-    // the process, but does NOT deminiaturize an already-minimized window —
-    // that needs reading/writing the AXMinimized attribute, which requires
-    // the separate (often not-yet-granted) Accessibility permission. Wrap
-    // that part in `try` so a missing Accessibility grant doesn't also take
-    // down the frontmost activation, which worked fine on its own before.
-    let script = format!(
-        r#"tell application "System Events"
-    set targetProcess to first process whose unix id is {pid}
-    try
-        repeat with w in windows of targetProcess
-            if value of attribute "AXMinimized" of w is true then
-                set value of attribute "AXMinimized" of w to false
-            end if
-        end repeat
-    end try
-    set frontmost of targetProcess to true
-end tell"#
-    );
-    let _ = std::process::Command::new("osascript")
-        .args(["-e", &script])
-        .status();
+    // AppleScript's System Events "AXMinimized" approach requires the target
+    // process to expose proper AX windows — SDL-based apps like sdl-freerdp
+    // (launched as a raw binary, not a real .app bundle) don't, so that
+    // approach can never deminiaturize them even with Accessibility granted.
+    // NSRunningApplication.activateWithOptions(.activateAllWindows) is a
+    // higher-level Cocoa API that reliably brings all of an app's windows
+    // forward — including restoring minimized ones — regardless of whether
+    // AX exposes them, and only needs ordinary process access (no special
+    // permission prompt).
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+
+    let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid as i32)
+    else {
+        log_focus_pid_result(pid, "no NSRunningApplication for pid");
+        return;
+    };
+    let activated = app.activateWithOptions(NSApplicationActivationOptions::ActivateAllWindows);
+    log_focus_pid_result(pid, &format!("activateWithOptions -> {activated}"));
+}
+
+/// Temporary diagnostic trail alongside log_focus_attempt.
+fn log_focus_pid_result(pid: u32, detail: &str) {
+    use std::io::Write;
+    let mut path = std::env::temp_dir();
+    path.push("rdpmanager-focus.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let now = chrono::Utc::now().to_rfc3339();
+        let _ = writeln!(f, "{now} focus_pid={pid} {detail}");
+    }
 }
 
 #[cfg(target_os = "windows")]
